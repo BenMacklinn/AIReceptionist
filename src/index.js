@@ -8,6 +8,8 @@ const http = require('http');
 const { handleVoiceWebhook } = require('./routes/voice');
 const { handleTranscription } = require('./routes/transcription');
 const { handleBooking } = require('./routes/booking');
+const fetch = require('node-fetch');
+const WebSocket = require('ws');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,37 +31,61 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // WebSocket server for real-time communication
 const wss = new WebSocketServer({ server });
 
+const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
+const ASSEMBLYAI_REALTIME_URL = 'wss://api.assemblyai.com/v2/realtime/ws?sample_rate=8000';
+
 wss.on('connection', (ws) => {
   console.log('New WebSocket connection established');
   
+  // Open a WebSocket connection to AssemblyAI for this call
+  const aaiSocket = new WebSocket(ASSEMBLYAI_REALTIME_URL, {
+    headers: { Authorization: ASSEMBLYAI_API_KEY }
+  });
+
+  aaiSocket.on('open', () => {
+    console.log('Connected to AssemblyAI real-time API');
+  });
+
+  aaiSocket.on('message', (msg) => {
+    const res = JSON.parse(msg);
+    if (res.text && res.message_type === 'FinalTranscript') {
+      // Pass the transcription to your AI logic
+      handleTranscription({ callSid: 'twilio', transcription: res.text }, ws);
+    }
+  });
+
+  aaiSocket.on('close', () => {
+    console.log('AssemblyAI socket closed');
+  });
+
+  aaiSocket.on('error', (err) => {
+    console.error('AssemblyAI socket error:', err);
+  });
+
   ws.on('message', (message) => {
-    // Check if the message is a string (likely JSON), otherwise it's binary/audio data
-    if (typeof message === 'string') {
+    // Only forward binary audio data to AssemblyAI
+    if (typeof message !== 'string') {
+      // Twilio sends audio as base64-encoded in JSON, so decode if needed
+      // But in most cases, message is already a Buffer
+      aaiSocket.readyState === WebSocket.OPEN && aaiSocket.send(message);
+    } else {
+      // Optionally handle Twilio JSON messages (e.g., stream_status)
       try {
         const data = JSON.parse(message);
-        // Handle different types of WebSocket messages
-        switch (data.type) {
-          case 'transcription':
-            handleTranscription(data, ws);
-            break;
-          case 'stream_status':
-            console.log('Stream status:', data.status);
-            break;
-          default:
-            console.log('Unknown message type:', data.type);
+        if (data.event === 'start') {
+          console.log('Twilio stream started');
+        } else if (data.event === 'stop') {
+          console.log('Twilio stream stopped');
         }
-      } catch (error) {
-        console.error('Error processing WebSocket JSON message:', error);
+      } catch (e) {
+        // Ignore non-JSON or unrecognized messages
       }
-    } else {
-      // It's likely binary audio data from Twilio Media Streams
-      // You can process the audio here if needed, or just ignore for now
-      // console.log('Received binary audio data');
     }
   });
 
   ws.on('close', () => {
     console.log('WebSocket connection closed');
+    aaiSocket.close();
   });
 });
 
