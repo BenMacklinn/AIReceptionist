@@ -1,0 +1,10 @@
+Starting test...
+Making HTTP request...
+Response code: 200
+Response: {
+  "args": {}, 
+  "headers": {
+    "Accept-Encoding": "identity", 
+    "Host": "httpbin.org", 
+    ...
+Test completed.
