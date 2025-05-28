@@ -2,8 +2,10 @@ from flask import Flask, jsonify, request
 from get_barber_master import print_barber_master_summary
 from get_barber_services import get_barber_services
 from get_barber_availabilities import get_barber_availabilities
+from get_barbers import get_barbers
+from datetime import datetime, timezone, timedelta
+import pytz
 import json
-from datetime import datetime
 import os
 
 app = Flask(__name__)
@@ -73,6 +75,67 @@ def check_booking():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# Helper functions
+
+def filter_bookable_slots(avail_data, now):
+    slots = {'morning': [], 'afternoon': [], 'evening': []}
+    for period in ['morning', 'afternoon', 'evening']:
+        for slot in avail_data.get('times', {}).get(period, []):
+            if slot.get('available'):
+                slot_time = datetime.fromisoformat(slot['time'].replace('Z', '+00:00'))
+                if slot_time > now:
+                    slots[period].append(slot['time'])
+    return slots
+
+def format_time_local(iso_time, tz_str='America/Toronto'):
+    dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00'))
+    local_tz = pytz.timezone(tz_str)
+    local_dt = dt.astimezone(local_tz)
+    return local_dt.strftime('%-I:%M %p')
+
+@app.route('/barber-summary', methods=['GET'])
+def barber_summary():
+    barbers = get_barbers()
+    today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
+    summary = []
+    for barber in barbers:
+        barber_id = barber.get('id', '')
+        name = barber.get('name', 'Unknown')
+        next_available = barber.get('next_available', 'N/A')
+        weekly_schedule = barber.get('weekly_schedule', {}) if 'weekly_schedule' in barber else barber.get('schedule', {})
+        services = get_barber_services(barber_id)
+        # Format services for JSON
+        formatted_services = [
+            {
+                'name': s.get('name', 'Unknown'),
+                'duration': s.get('duration', 0),
+                'price': s.get('cost', 0) / 100
+            } for s in services
+        ]
+        # Availabilities for next 7 days
+        availabilities = {}
+        for i in range(7):
+            day_date = today + timedelta(days=i)
+            day_str = day_date.strftime('%Y-%m-%d')
+            avail = get_barber_availabilities(barber_id, day_str)
+            filtered_avail = filter_bookable_slots(avail, now) if avail else {'morning': [], 'afternoon': [], 'evening': []}
+            # Format times as human-readable
+            formatted = {
+                period: [format_time_local(t) for t in filtered_avail.get(period, [])]
+                for period in ['morning', 'afternoon', 'evening']
+            }
+            availabilities[day_str] = formatted
+        summary.append({
+            'name': name,
+            'id': barber_id,
+            'next_available': next_available,
+            'weekly_schedule': weekly_schedule,
+            'services': formatted_services,
+            'availabilities': availabilities
+        })
+    return jsonify(summary)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))) 
