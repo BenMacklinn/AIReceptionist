@@ -15,7 +15,7 @@ def home():
     return jsonify({"status": "online", "message": "Barber Booking API is running"})
 
 @app.route('/barbers', methods=['GET'])
-def get_barbers():
+def get_barbers_route():
     try:
         # Get all barber data
         barbers_data = print_barber_master_summary()
@@ -96,6 +96,7 @@ def format_time_local(iso_time, tz_str='America/Toronto'):
 
 @app.route('/barber-summary', methods=['GET'])
 def barber_summary():
+    print("DEBUG: Returning availabilities for 2 days only")
     barbers = get_barbers()
     today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
