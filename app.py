@@ -114,9 +114,9 @@ def barber_summary():
                 'price': s.get('cost', 0) / 100
             } for s in services
         ]
-        # Availabilities for next 7 days
+        # Availabilities for today and tomorrow only
         availabilities = {}
-        for i in range(7):
+        for i in range(2):
             day_date = today + timedelta(days=i)
             day_str = day_date.strftime('%Y-%m-%d')
             avail = get_barber_availabilities(barber_id, day_str)
