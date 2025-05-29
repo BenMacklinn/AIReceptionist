@@ -96,7 +96,7 @@ def format_time_local(iso_time, tz_str='America/Toronto'):
 
 @app.route('/barber-summary', methods=['GET'])
 def barber_summary():
-    print("DEBUG: Returning availabilities for 2 days only")
+    print("DEBUG: Returning availabilities for 7 days")
     barbers = get_barbers()
     today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
@@ -115,9 +115,9 @@ def barber_summary():
                 'price': s.get('cost', 0) / 100
             } for s in services
         ]
-        # Availabilities for today and tomorrow only
+        # Availabilities for next 7 days
         availabilities = {}
-        for i in range(2):
+        for i in range(7):
             day_date = today + timedelta(days=i)
             day_str = day_date.strftime('%Y-%m-%d')
             avail = get_barber_availabilities(barber_id, day_str)
@@ -158,6 +158,35 @@ def barber_availability_week():
             for period in ['morning', 'afternoon', 'evening']:
                 all_times.extend([format_time_local(t) for t in filtered_avail.get(period, [])])
             availabilities[day_str] = all_times
+        summary.append({
+            'name': name,
+            'id': barber_id,
+            'availabilities': availabilities
+        })
+    return jsonify(summary)
+
+@app.route('/barber-weekly-availability', methods=['GET'])
+def barber_weekly_availability():
+    barbers = get_barbers()
+    today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
+    summary = []
+    for barber in barbers:
+        barber_id = barber.get('id', '')
+        name = barber.get('name', 'Unknown')
+        # Get availabilities for next 7 days
+        availabilities = {}
+        for i in range(7):
+            day_date = today + timedelta(days=i)
+            day_str = day_date.strftime('%Y-%m-%d')
+            avail = get_barber_availabilities(barber_id, day_str)
+            filtered_avail = filter_bookable_slots(avail, now) if avail else {'morning': [], 'afternoon': [], 'evening': []}
+            # Format times as human-readable
+            formatted = {
+                period: [format_time_local(t) for t in filtered_avail.get(period, [])]
+                for period in ['morning', 'afternoon', 'evening']
+            }
+            availabilities[day_str] = formatted
         summary.append({
             'name': name,
             'id': barber_id,
