@@ -138,5 +138,32 @@ def barber_summary():
         })
     return jsonify(summary)
 
+@app.route('/barber-availability-week', methods=['GET'])
+def barber_availability_week():
+    barbers = get_barbers()
+    today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
+    summary = []
+    for barber in barbers:
+        barber_id = barber.get('id', '')
+        name = barber.get('name', 'Unknown')
+        availabilities = {}
+        for i in range(7):
+            day_date = today + timedelta(days=i)
+            day_str = day_date.strftime('%Y-%m-%d')
+            avail = get_barber_availabilities(barber_id, day_str)
+            filtered_avail = filter_bookable_slots(avail, now) if avail else {'morning': [], 'afternoon': [], 'evening': []}
+            # Flatten all periods into a single list of times for the day
+            all_times = []
+            for period in ['morning', 'afternoon', 'evening']:
+                all_times.extend([format_time_local(t) for t in filtered_avail.get(period, [])])
+            availabilities[day_str] = all_times
+        summary.append({
+            'name': name,
+            'id': barber_id,
+            'availabilities': availabilities
+        })
+    return jsonify(summary)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))) 
