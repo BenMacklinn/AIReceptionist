@@ -173,7 +173,8 @@ def barber_weekly_availability():
     summary = []
     
     for barber in barbers:
-        barber_id = barber.get('id', '')
+        name = barber.get('name', 'Unknown')
+        barber_id = barber.get('id', '')  # We still need this to get availabilities
         # Get availabilities for next 7 days
         availabilities = {}
         has_any_availability = False
@@ -199,7 +200,7 @@ def barber_weekly_availability():
         # Only include barbers who have at least one available slot
         if has_any_availability:
             summary.append({
-                'id': barber_id,
+                'name': name,
                 'availabilities': availabilities
             })
     
