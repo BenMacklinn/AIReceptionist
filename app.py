@@ -171,27 +171,38 @@ def barber_weekly_availability():
     today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
     summary = []
+    
     for barber in barbers:
         barber_id = barber.get('id', '')
-        name = barber.get('name', 'Unknown')
         # Get availabilities for next 7 days
         availabilities = {}
+        has_any_availability = False
+        
         for i in range(7):
             day_date = today + timedelta(days=i)
             day_str = day_date.strftime('%Y-%m-%d')
             avail = get_barber_availabilities(barber_id, day_str)
             filtered_avail = filter_bookable_slots(avail, now) if avail else {'morning': [], 'afternoon': [], 'evening': []}
-            # Format times as human-readable
-            formatted = {
-                period: [format_time_local(t) for t in filtered_avail.get(period, [])]
-                for period in ['morning', 'afternoon', 'evening']
-            }
-            availabilities[day_str] = formatted
-        summary.append({
-            'name': name,
-            'id': barber_id,
-            'availabilities': availabilities
-        })
+            
+            # Only include periods that have available slots
+            day_availability = {}
+            for period in ['morning', 'afternoon', 'evening']:
+                slots = [format_time_local(t) for t in filtered_avail.get(period, [])]
+                if slots:  # Only add period if it has slots
+                    day_availability[period] = slots
+                    has_any_availability = True
+            
+            # Only include the day if it has any available slots
+            if day_availability:
+                availabilities[day_str] = day_availability
+        
+        # Only include barbers who have at least one available slot
+        if has_any_availability:
+            summary.append({
+                'id': barber_id,
+                'availabilities': availabilities
+            })
+    
     return jsonify(summary)
 
 if __name__ == '__main__':
